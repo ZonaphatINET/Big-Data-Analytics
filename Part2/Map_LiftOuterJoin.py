@@ -1,31 +1,30 @@
 from mrjob.job import MRJob
-from mrjob.step import MRStep
 
 class MapReduceLiftOuterJoin(MRJob):
+
     def mapper(self, _, line):
         if 'status_id' not in line:
-            data = line.split(',') 
-            
-            id = data[1]
-
-            yield id, data
-
-
+            data = line.split(',')
+            status_type = data[0]  # Assuming 'FB2' or 'FB3' is the first field
+            status_id = data[1]    # Assuming 'status_id' is the second field
+            yield status_id, (status_type, data)
 
     def reducer(self, key, values):
         fb1 = []
         fb2 = []
+
         for v in values:
             if v[0] == 'FB2':
-                fb1.append(v)
+                fb1.append(v[1])
             elif v[0] == 'FB3':
-                fb2.append(v)
+                fb2.append(v[1])
 
-        for i in fb1:
-            for j in fb2:
-                yield None, (i+j)
+        for value1 in fb1:
+            if len(fb2) > 0:
+                for value2 in fb2:
+                    yield None, value1 + value2
+            else:
+                yield None, value1
 
-       
-   
-if (__name__ == '__main__'):
+if __name__ == '__main__':
     MapReduceLiftOuterJoin.run()
