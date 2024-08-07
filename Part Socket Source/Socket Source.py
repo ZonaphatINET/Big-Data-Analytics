@@ -1,29 +1,14 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode
-from pyspark.sql.functions import split
+from pyspark.sql.functions import explode, split
 
-"""
-
-Start a socket streaming source using the following command
-$ nc -nlk 9999 
-
-Above 9999 is the port number on which socket messages will be published.
-Set the logging level to WARN before you launch spark streaming service so that 
-streaming messages are not lost in the logs message.  
-
-Open $SPARK_HOME/conf/log4j.properties and set the following
-log4j.rootCategory=WARN, console
-
-
-Then start the spark streaming application
-$SPARK_HOME/bin/spark-submit structured-streaming.py
-"""
+# Create Spark session
 spark = (SparkSession
     .builder
     .appName("StructuredStreaming")
     .getOrCreate())
 
-host, port = "localhost", 9999
+# Configure the socket source
+host, port = "localhost", 5555
 lines = (spark
     .readStream
     .format("socket")
@@ -31,15 +16,27 @@ lines = (spark
     .option("port", port)
     .load())
 
-print("lines isStreaming: ", lines.isStreaming)
+# Split lines into words
+words = lines.select(
+    explode(
+        split(lines.value, " ")
+    ).alias("word")
+)
 
-query = (lines
+# Group by word and count occurrences
+wordCounts = words.groupBy("word").count()
+
+# Write the word counts to the console
+query = (wordCounts
     .writeStream
+    .outputMode("complete")  # Use "complete" mode for word counts
     .format("console")
     .option("truncate", False)
     .option("numRows", 1000)
     .start())
 
+# Await termination of the query
 spark.streams.awaitAnyTermination()
 
+# Close Spark session
 spark.close()
